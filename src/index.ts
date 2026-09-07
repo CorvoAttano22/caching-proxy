@@ -1,13 +1,24 @@
 import { createServer } from "node:http";
-console.log(process.argv);
-const origin = "https://dummyjson.com";
-const cache = new Map<string, CachedResponse>();
+import yargs from "yargs";
+import { hideBin } from "yargs/helpers";
+import { get, set } from "./cache/cache";
+
+const argv = yargs(hideBin(process.argv))
+  .option("port", {
+    type: "number",
+    demandOption: true,
+    describe: "Port for the caching proxy",
+  })
+  .option("origin", {
+    type: "string",
+    demandOption: true,
+    describe: "Origin server URL",
+  })
+  .parseSync();
+
+const origin = argv.origin;
+
 const headersToKeep = ["content-type", "etag", "vary"];
-type CachedResponse = {
-  status: number;
-  headers: Record<string, string>;
-  body: string;
-};
 
 function createCacheKey(method: string, url: URL): string {
   return `${method}:${url.href}`;
@@ -17,9 +28,8 @@ const server = createServer(async (req, res) => {
   const myURL = new URL(req.url ?? "/", origin);
   const key = createCacheKey(req.method ?? "GET", myURL);
 
-  const cached = cache.get(key);
+  const cached = get(key);
 
-  //to be understood
   if (cached) {
     console.log("Cache Hit");
 
@@ -34,7 +44,6 @@ const server = createServer(async (req, res) => {
 
     return;
   }
-  //
 
   const response = await fetch(myURL);
 
@@ -52,19 +61,20 @@ const server = createServer(async (req, res) => {
   res.statusCode = response.status;
   res.setHeader("X-Cache", "MISS");
 
-  const cachedResponse: CachedResponse = {
+  const cachedResponse = {
     status: response.status,
     headers,
     body,
   };
 
-  cache.set(key, cachedResponse);
+  set(key, cachedResponse);
 
   console.log(key);
   console.log(cachedResponse);
+
   res.end(body);
 });
 
-server.listen(3000, () => {
-  console.log("Server is running on port 3000");
+server.listen(argv.port, () => {
+  console.log(`Server is running on port ${argv.port}`);
 });
