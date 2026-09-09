@@ -1,7 +1,7 @@
 import { createServer } from "node:http";
 import yargs from "yargs";
 import { hideBin } from "yargs/helpers";
-import { get, set } from "./cache/cache";
+import { get, set, connectRedis } from "./cache/cache";
 
 const argv = yargs(hideBin(process.argv))
   .option("port", {
@@ -75,6 +75,11 @@ const server = createServer(async (req, res) => {
   res.end(body);
 });
 
-server.listen(argv.port, () => {
-  console.log(`Server is running on port ${argv.port}`);
-});
+async function start() {
+  await connectRedis();
+  server.listen(argv.port, () => {
+    console.log(`Server is running on port ${argv.port}`);
+  });
+}
+
+start();
