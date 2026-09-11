@@ -19,16 +19,25 @@ type CachedResponse = {
   body: string;
 };
 
-const cache = new Map<string, CachedResponse>();
+//used "identifier" instead of "key" to not get confused with key>value in headers
+export async function get(identifier: string): Promise<CachedResponse | null> {
+  const value = await redis.get(identifier);
 
-export function get(key: string) {
-  return cache.get(key);
+  if (!value) {
+    return null
+  }
+
+  return JSON.parse(value)
 }
 
-export function set(key: string, value: CachedResponse) {
-  cache.set(key, value);
+export async function set(identifier: string, value: CachedResponse) {
+  await redis.set(identifier, JSON.stringify(value));
 }
 
-export function clear() {
-  cache.clear();
+export async function clear() {
+  await redis.flushDb();
+}
+
+export async function disconnectRedis() {
+  await redis.quit();
 }

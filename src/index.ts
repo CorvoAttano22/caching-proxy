@@ -1,18 +1,29 @@
 import { createServer } from "node:http";
 import yargs from "yargs";
 import { hideBin } from "yargs/helpers";
-import { get, set, connectRedis } from "./cache/cache";
+import { get, set, clear, connectRedis, disconnectRedis } from "./cache/cache";
 
 const argv = yargs(hideBin(process.argv))
   .option("port", {
     type: "number",
-    demandOption: true,
     describe: "Port for the caching proxy",
   })
   .option("origin", {
     type: "string",
-    demandOption: true,
     describe: "Origin server URL",
+  })
+  .option("clear-cache", {
+    type: "boolean",
+    default: false,
+    describe: "Clear the cache",
+  })
+  .check((argv) => {
+    if (!argv["clear-cache"] && (!argv.port || !argv.origin)) {
+      throw new Error(
+        "--port and --origin are required unless --clear-cache is used",
+      );
+    }
+    return true;
   })
   .parseSync();
 
@@ -26,9 +37,9 @@ function createCacheKey(method: string, url: URL): string {
 
 const server = createServer(async (req, res) => {
   const myURL = new URL(req.url ?? "/", origin);
-  const key = createCacheKey(req.method ?? "GET", myURL);
+  const identifier = createCacheKey(req.method ?? "GET", myURL);
 
-  const cached = get(key);
+  const cached = await get(identifier);
 
   if (cached) {
     console.log("Cache Hit");
@@ -45,6 +56,7 @@ const server = createServer(async (req, res) => {
     return;
   }
 
+  console.log("Cache Miss");
   const response = await fetch(myURL);
 
   const headers: Record<string, string> = {};
@@ -67,16 +79,21 @@ const server = createServer(async (req, res) => {
     body,
   };
 
-  set(key, cachedResponse);
-
-  console.log(key);
-  console.log(cachedResponse);
+  await set(identifier, cachedResponse);
 
   res.end(body);
 });
 
 async function start() {
   await connectRedis();
+
+  if (argv["clear-cache"]) {
+    await clear();
+    console.log("Cache cleared");
+    await disconnectRedis();
+    return;
+  }
+
   server.listen(argv.port, () => {
     console.log(`Server is running on port ${argv.port}`);
   });
