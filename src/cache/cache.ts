@@ -2,6 +2,9 @@ import { createClient } from "redis";
 
 const redis = createClient({
   url: "redis://localhost:6379",
+  socket: {
+    reconnectStrategy: false,
+  },
 });
 
 redis.on("error", (err) => {
@@ -24,14 +27,16 @@ export async function get(identifier: string): Promise<CachedResponse | null> {
   const value = await redis.get(identifier);
 
   if (!value) {
-    return null
+    return null;
   }
 
-  return JSON.parse(value)
+  return JSON.parse(value);
 }
 
 export async function set(identifier: string, value: CachedResponse) {
-  await redis.set(identifier, JSON.stringify(value));
+  await redis.set(identifier, JSON.stringify(value), {
+    EX: 300
+  });
 }
 
 export async function clear() {

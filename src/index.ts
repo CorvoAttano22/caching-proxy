@@ -1,3 +1,4 @@
+import { error } from 'node:console';
 import { createServer } from "node:http";
 import yargs from "yargs";
 import { hideBin } from "yargs/helpers";
@@ -39,7 +40,17 @@ const server = createServer(async (req, res) => {
   const myURL = new URL(req.url ?? "/", origin);
   const identifier = createCacheKey(req.method ?? "GET", myURL);
 
-  const cached = await get(identifier);
+  let cached;
+  try {
+    cached = await get(identifier);
+  } catch (error) {
+    console.error("Redis Error:", error);
+
+    res.statusCode = 503;
+    res.end("Cache service unavailable");
+
+    return;
+  }
 
   if (cached) {
     console.log("Cache Hit");
@@ -55,12 +66,22 @@ const server = createServer(async (req, res) => {
 
     return;
   }
-
   console.log("Cache Miss");
-  const response = await fetch(myURL);
 
+  let response;
+  try{
+    response = await fetch(myURL);
+  }
+  catch (error){
+    console.error("Origin Error:", error)
+
+  res.statusCode = 502;
+  res.end("origin server unavailable")
+
+  return;
+  }
+  
   const headers: Record<string, string> = {};
-
   response.headers.forEach((value, key) => {
     if (headersToKeep.includes(key)) {
       headers[key] = value;
